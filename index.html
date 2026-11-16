@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>European grid capacity for data-centre siting</title>
+<style>
+:root { --fg:#1a1a1a; --muted:#666; --bg:#fafaf8; --panel:#fff; --line:#e3e1db; --c0:#d6d3cc; --c1:#c9dcef; --c2:#7fb0dc; --c3:#2f78b7; --c4:#123f6b; }
+@media (prefers-color-scheme: dark) { :root { --fg:#ecebe7; --muted:#a3a19b; --bg:#1b1b1a; --panel:#242423; --line:#3a3936; --c0:#4a4844; --c1:#2a4560; --c2:#3f74a6; --c3:#6aa6dc; --c4:#b9dbf7; } }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 15px/1.5 -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+main { max-width: 1100px; margin: 0 auto; padding: 32px 20px 60px; display: flex; flex-direction: column; gap: 36px; }
+h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 400; font-size: 2rem; margin: 0; }
+h2 { font-size: 1.15rem; font-weight: 600; margin: 0 0 6px; }
+.lede { font-size: 1.05rem; margin: 10px 0 0; max-width: 60em; }
+.muted { color: var(--muted); font-size: 0.85rem; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 12px 0; }
+.big { font-family: Georgia, serif; font-size: 2.2rem; font-variant-numeric: tabular-nums; }
+.wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; }
+.n { text-align: right; }
+tr.pick { cursor: pointer; }
+tr.pick td:first-child { text-decoration: underline; text-decoration-color: var(--line); }
+tr.pick:hover td, tr.on td { background: var(--panel); }
+.row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); color: var(--fg); }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 0.8rem; color: var(--muted); margin: 8px 0; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+.chart { position: relative; }
+.chart svg text { fill: var(--muted); font-size: 12px; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 4px 14px rgba(0,0,0,.12); border-radius: 6px; padding: 6px 8px; font-size: 0.8rem; white-space: nowrap; }
+details summary { cursor: pointer; font-weight: 600; }
+footer { border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>European grid capacity for data-centre siting</h1>
+    <p class="lede">Spare capacity for new demand, from each grid operator's own publication, at the finest level each one publishes. Spain has spare capacity at <b id="esAny"></b> of its transmission nodes. Sweden has 100 MW or more in <b id="seHund"></b> of its counties. In the Netherlands, <b id="nlShort"></b> of high-voltage stations are short of capacity for new demand.</p>
+    <p class="muted">Capacity is shown in bands and summarised by region. Substation-level detail, names and locations are available on request. Data as of 16 November 2026.</p>
+  </header>
+
+  <section>
+    <h2>Country overview</h2>
+    <p class="muted">Price and carbon are the average day-ahead price and generation carbon intensity for the country's main bidding zone, 1 Nov 2025 to 1 Nov 2026. Click a country with location-level data to see its regions.</p>
+    <div class="wrap"><table>
+      <thead><tr><th>Country</th><th>Grid data</th><th>What the operator's data shows</th><th class="n">Price €/MWh</th><th class="n">Carbon g/kWh</th></tr></thead>
+      <tbody id="statusRows"></tbody>
+    </table></div>
+  </section>
+
+  <section id="regions">
+    <div class="row"><h2>Regions by spare capacity band</h2><select id="pick" aria-label="Country"></select></div>
+    <p class="muted">Each bar counts the locations in a region by how much spare demand capacity they have. Great Britain counts primary substations (mostly 11 kV and 33 kV), Spain counts transmission nodes (220 kV and 400 kV), Sweden shows one value per county.</p>
+    <div class="tiles">
+      <div class="card"><div class="muted">Locations</div><div class="big" id="tLoc"></div></div>
+      <div class="card"><div class="muted">With any spare capacity</div><div class="big" id="tAny"></div></div>
+      <div class="card"><div class="muted">With 100 MW or more</div><div class="big" id="tHund"></div></div>
+    </div>
+    <div class="legend" id="legend"></div>
+    <div class="chart" id="chart"></div>
+    <div class="wrap"><table>
+      <thead><tr><th>Region</th><th class="n">Locations</th><th class="n">At 100 MW or more</th><th>Granted and requested demand</th></tr></thead>
+      <tbody id="regRows"></tbody>
+    </table></div>
+  </section>
+
+  <section id="nl">
+    <h2>Netherlands: high-voltage stations by status for new demand</h2>
+    <p class="muted">Each bar counts the high-voltage stations in a congestion area by their status for new demand. Year cleared is when the area is expected to offer capacity again.</p>
+    <div class="legend" id="nlLegend"></div>
+    <div class="chart" id="nlChart"></div>
+    <div class="wrap"><table>
+      <thead><tr><th>Area</th><th class="n">Stations</th><th class="n">Short, with queue</th><th>Queue for new demand</th><th>Year cleared</th></tr></thead>
+      <tbody id="nlRows"></tbody>
+    </table></div>
+  </section>
+
+  <section id="fr">
+    <h2>France: zones and sites named for large demand</h2>
+    <p class="muted">France does not publish spare demand capacity by substation. These are the sites and zones designated for large connections, with the power and timing stated for each.</p>
+    <div class="wrap"><table>
+      <thead><tr><th>Zone or site</th><th>Region</th><th>Type</th><th>What is stated</th><th>Power from</th></tr></thead>
+      <tbody id="frRows"></tbody>
+    </table></div>
+  </section>
+
+  <details>
+    <summary>Method and bands</summary>
+    <p class="muted">Spare capacity is each grid operator's own published figure for new demand, at the finest level it publishes. Spain is shown by transmission node (220 kV and 400 kV), Great Britain by primary substation, Sweden by county, the Netherlands by high-voltage station, and France by designated zone.</p>
+    <p class="muted">Sweden publishes band values only, and its lowest band is shown here as under 25 MW. Great Britain primary substations are distribution sites, so a 100 MW site would usually connect at a higher level. Granted and requested demand is capacity already granted plus requests in progress, shown in bands.</p>
+    <p class="muted">Belgium, Finland, Norway and Italy are in the overview table at country level. Ireland and Germany are in progress.</p>
+  </details>
+</main>
+
+<script>
+const REGIONS = [{"country": "Great Britain (London, East, South East)", "region": "East of England", "level": "Primary substation", "None": "39", "Under 25 MW": "434", "25 to 100 MW": "74", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "547", "share_100mw_plus": "0.0", "queue_band": "Not shown"}, {"country": "Great Britain (London, East, South East)", "region": "London", "level": "Primary substation", "None": "1", "Under 25 MW": "69", "25 to 100 MW": "53", "100 to 300 MW": "5", "300 MW or more": "0", "locations": "128", "share_100mw_plus": "0.04", "queue_band": "Not shown"}, {"country": "Great Britain (London, East, South East)", "region": "South East England", "level": "Primary substation", "None": "11", "Under 25 MW": "230", "25 to 100 MW": "49", "100 to 300 MW": "2", "300 MW or more": "0", "locations": "292", "share_100mw_plus": "0.01", "queue_band": "Not shown"}, {"country": "Spain", "region": "Andalucía", "level": "Transmission node", "None": "47", "Under 25 MW": "2", "25 to 100 MW": "9", "100 to 300 MW": "15", "300 MW or more": "21", "locations": "94", "share_100mw_plus": "0.38", "queue_band": "5 GW or more"}, {"country": "Spain", "region": "Aragón", "level": "Transmission node", "None": "52", "Under 25 MW": "1", "25 to 100 MW": "1", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "54", "share_100mw_plus": "0.0", "queue_band": "5 GW or more"}, {"country": "Spain", "region": "Canarias", "level": "Transmission node", "None": "48", "Under 25 MW": "29", "25 to 100 MW": "22", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "99", "share_100mw_plus": "0.0", "queue_band": "Under 1 GW"}, {"country": "Spain", "region": "Cantabria", "level": "Transmission node", "None": "2", "Under 25 MW": "0", "25 to 100 MW": "3", "100 to 300 MW": "2", "300 MW or more": "5", "locations": "12", "share_100mw_plus": "0.58", "queue_band": "Under 1 GW"}, {"country": "Spain", "region": "Castilla y León", "level": "Transmission node", "None": "36", "Under 25 MW": "0", "25 to 100 MW": "2", "100 to 300 MW": "20", "300 MW or more": "28", "locations": "86", "share_100mw_plus": "0.56", "queue_band": "1 to 5 GW"}, {"country": "Spain", "region": "Castilla-La Mancha", "level": "Transmission node", "None": "30", "Under 25 MW": "1", "25 to 100 MW": "4", "100 to 300 MW": "8", "300 MW or more": "5", "locations": "48", "share_100mw_plus": "0.27", "queue_band": "1 to 5 GW"}, {"country": "Spain", "region": "Cataluña", "level": "Transmission node", "None": "111", "Under 25 MW": "2", "25 to 100 MW": "0", "100 to 300 MW": "4", "300 MW or more": "0", "locations": "117", "share_100mw_plus": "0.03", "queue_band": "1 to 5 GW"}, {"country": "Spain", "region": "Ceuta", "level": "Transmission node", "None": "1", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "None"}, {"country": "Spain", "region": "Comunidad Foral de Navarra", "level": "Transmission node", "None": "12", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "12", "share_100mw_plus": "0.0", "queue_band": "Under 1 GW"}, {"country": "Spain", "region": "Comunidad Valenciana", "level": "Transmission node", "None": "59", "Under 25 MW": "0", "25 to 100 MW": "4", "100 to 300 MW": "7", "300 MW or more": "3", "locations": "73", "share_100mw_plus": "0.14", "queue_band": "1 to 5 GW"}, {"country": "Spain", "region": "Comunidad de Madrid", "level": "Transmission node", "None": "91", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "91", "share_100mw_plus": "0.0", "queue_band": "1 to 5 GW"}, {"country": "Spain", "region": "Extremadura", "level": "Transmission node", "None": "20", "Under 25 MW": "1", "25 to 100 MW": "1", "100 to 300 MW": "1", "300 MW or more": "11", "locations": "34", "share_100mw_plus": "0.35", "queue_band": "5 GW or more"}, {"country": "Spain", "region": "Galicia", "level": "Transmission node", "None": "8", "Under 25 MW": "0", "25 to 100 MW": "4", "100 to 300 MW": "25", "300 MW or more": "23", "locations": "60", "share_100mw_plus": "0.8", "queue_band": "1 to 5 GW"}, {"country": "Spain", "region": "Islas Baleares", "level": "Transmission node", "None": "13", "Under 25 MW": "18", "25 to 100 MW": "40", "100 to 300 MW": "7", "300 MW or more": "0", "locations": "78", "share_100mw_plus": "0.09", "queue_band": "Under 1 GW"}, {"country": "Spain", "region": "La Rioja", "level": "Transmission node", "None": "3", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "1", "300 MW or more": "2", "locations": "6", "share_100mw_plus": "0.5", "queue_band": "Under 1 GW"}, {"country": "Spain", "region": "País Vasco", "level": "Transmission node", "None": "20", "Under 25 MW": "2", "25 to 100 MW": "2", "100 to 300 MW": "8", "300 MW or more": "6", "locations": "38", "share_100mw_plus": "0.37", "queue_band": "1 to 5 GW"}, {"country": "Spain", "region": "Principado de Asturias", "level": "Transmission node", "None": "5", "Under 25 MW": "0", "25 to 100 MW": "3", "100 to 300 MW": "3", "300 MW or more": "6", "locations": "17", "share_100mw_plus": "0.53", "queue_band": "1 to 5 GW"}, {"country": "Spain", "region": "Región de Murcia", "level": "Transmission node", "None": "5", "Under 25 MW": "0", "25 to 100 MW": "2", "100 to 300 MW": "1", "300 MW or more": "9", "locations": "17", "share_100mw_plus": "0.59", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Blekinge län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "None"}, {"country": "Sweden", "region": "Dalarnas län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Gotlands län", "level": "County (transmission)", "None": "1", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Gävleborgs län", "level": "County (transmission)", "None": "0", "Under 25 MW": "1", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Hallands län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Jämtlands län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Jönköpings län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "None"}, {"country": "Sweden", "region": "Kalmar län", "level": "County (transmission)", "None": "0", "Under 25 MW": "1", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Kronobergs län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "1", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Norrbottens län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "5 GW or more"}, {"country": "Sweden", "region": "Skåne län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "1", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Stockholms län", "level": "County (transmission)", "None": "0", "Under 25 MW": "1", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Södermanlands län", "level": "County (transmission)", "None": "0", "Under 25 MW": "1", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Uppsala län", "level": "County (transmission)", "None": "0", "Under 25 MW": "1", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Värmlands län", "level": "County (transmission)", "None": "0", "Under 25 MW": "1", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Västerbottens län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Västernorrlands län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Västmanlands län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "1", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Västra Götalands län", "level": "County (transmission)", "None": "0", "Under 25 MW": "1", "25 to 100 MW": "0", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "1 to 5 GW"}, {"country": "Sweden", "region": "Örebro län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "0", "100 to 300 MW": "1", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "1.0", "queue_band": "Under 1 GW"}, {"country": "Sweden", "region": "Östergötlands län", "level": "County (transmission)", "None": "0", "Under 25 MW": "0", "25 to 100 MW": "1", "100 to 300 MW": "0", "300 MW or more": "0", "locations": "1", "share_100mw_plus": "0.0", "queue_band": "Under 1 GW"}];
+const COUNTRIES = [{"country": "Great Britain (London, East, South East)", "locations": "967", "share_any": "0.95", "share_100": "0.01"}, {"country": "Spain", "locations": "937", "share_any": "0.4", "share_100": "0.24"}, {"country": "Sweden", "locations": "21", "share_any": "0.95", "share_100": "0.57"}];
+const STATUS = [{"country": "Spain", "data_depth": "Location level", "grid_status": "Spare demand capacity at 40% of 937 transmission nodes; none in Madrid, Navarra, almost none in Aragón and Cataluña", "price_mean_eur_mwh": "81.0", "carbon_g_kwh": "123.8"}, {"country": "Sweden", "data_depth": "Region level", "grid_status": "9 of 21 counties in the 400 MW+ band for 2026; 7 counties, including Stockholm, Uppsala and Västra Götaland, in the lowest (25 MW) band", "price_mean_eur_mwh": "68.5", "carbon_g_kwh": "40.1"}, {"country": "Great Britain (London, East, South East)", "data_depth": "Location level", "grid_status": "95% of 967 primary substations have some spare demand capacity, about 1% have 100 MW or more; London grid supply points heavily loaded", "price_mean_eur_mwh": "", "carbon_g_kwh": ""}, {"country": "Netherlands", "data_depth": "Location level", "grid_status": "190 of 271 high-voltage stations short of capacity for new demand, with queues; the south and west clear 2032 to 2036; the north limited but no queue", "price_mean_eur_mwh": "110.7", "carbon_g_kwh": "388.2"}, {"country": "Belgium", "data_depth": "Map only", "grid_status": "Published capacity covers connections under 300 MW; larger loads need a site-specific study", "price_mean_eur_mwh": "109.4", "carbon_g_kwh": "203.1"}, {"country": "Finland", "data_depth": "Map only", "grid_status": "No new consumption connections in southern Finland before 2027; easing expected 2027 to 2028", "price_mean_eur_mwh": "54.8", "carbon_g_kwh": "74.2"}, {"country": "Norway", "data_depth": "Statement only", "grid_status": "About 7,700 MW of new consumption already reserved; new reservations north of Svartisen on hold", "price_mean_eur_mwh": "101.7", "carbon_g_kwh": "26.0"}, {"country": "Italy", "data_depth": "Statement only", "grid_status": "109 GW of data-centre connection requests at end Sep 2026; 1.9 GW with a detailed grid solution or contract", "price_mean_eur_mwh": "148.6", "carbon_g_kwh": "335.2"}, {"country": "France", "data_depth": "Zone level", "grid_status": "No substation-level demand capacity published; 5 fast-track sites of 700 MW to 1 GW (2 Île-de-France, 3 Hauts-de-France) plus 14 designated industrial zones with power from 2028 to 2030", "price_mean_eur_mwh": "85.7", "carbon_g_kwh": "36.5"}, {"country": "Ireland", "data_depth": "In progress", "grid_status": "In progress", "price_mean_eur_mwh": "143.1", "carbon_g_kwh": "236.5"}, {"country": "Germany", "data_depth": "In progress", "grid_status": "No single national view of demand capacity; in progress", "price_mean_eur_mwh": "111.3", "carbon_g_kwh": "323.3"}];
+const BANDS = ['None', 'Under 25 MW', '25 to 100 MW', '100 to 300 MW', '300 MW or more'];
+const COLORS = ['var(--c0)', 'var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)'];
+const pct = (v) => Math.round(v * 100) + '%';
+const f0 = (v) => (v === '' || v == null ? '' : Math.round(+v).toString());
+const el = (tag, attrs = {}, text) => { const e = document.createElement(tag); Object.assign(e, attrs); if (text != null) e.textContent = text; return e; };
+const svgEl = (tag, attrs) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; };
+
+const regs = REGIONS.map((r) => ({ ...r, locations: +r.locations, at100: +r['100 to 300 MW'] + +r['300 MW or more'], ...Object.fromEntries(BANDS.map((b) => [b, +r[b]])) }));
+const withRegions = [...new Set(regs.map((r) => r.country))];
+let current = 'Spain';
+
+const byC = Object.fromEntries(COUNTRIES.map((c) => [c.country, c]));
+document.getElementById('esAny').textContent = pct(+byC['Spain'].share_any);
+document.getElementById('seHund').textContent = pct(+byC['Sweden'].share_100);
+
+const legend = document.getElementById('legend');
+BANDS.forEach((b, i) => { const s = el('span'); const sw = el('i'); sw.style.background = COLORS[i]; s.append(sw, b); legend.append(s); });
+
+const pick = document.getElementById('pick');
+withRegions.forEach((n) => pick.append(new Option(n, n)));
+pick.onchange = () => { current = pick.value; drawRegion(); };
+
+function drawStatus() {
+  const tb = document.getElementById('statusRows');
+  tb.replaceChildren();
+  STATUS.forEach((r) => {
+    const tr = el('tr');
+    if (withRegions.includes(r.country)) {
+      tr.className = 'pick' + (r.country === current ? ' on' : '');
+      tr.onclick = () => { current = r.country; pick.value = current; drawRegion(); document.getElementById('regions').scrollIntoView({ behavior: 'smooth' }); };
+    }
+    [r.country, r.data_depth, r.grid_status, f0(r.price_mean_eur_mwh), f0(r.carbon_g_kwh)].forEach((v, i) => tr.append(el('td', { className: i === 3 || i === 4 ? 'n' : '' }, v)));
+    tb.append(tr);
+  });
+}
+
+function drawRegion() {
+  drawStatus();
+  pick.value = current;
+  const rows = regs.filter((r) => r.country === current).sort((a, b) => b.at100 - a.at100 || b.locations - a.locations);
+  const total = rows.reduce((s, r) => s + r.locations, 0);
+  document.getElementById('tLoc').textContent = total.toLocaleString('en');
+  document.getElementById('tAny').textContent = pct(rows.reduce((s, r) => s + r.locations - r.None, 0) / total);
+  document.getElementById('tHund').textContent = pct(rows.reduce((s, r) => s + r.at100, 0) / total);
+
+  const tb = document.getElementById('regRows');
+  tb.replaceChildren();
+  rows.forEach((r) => { const tr = el('tr'); [r.region, r.locations, r.at100, r.queue_band].forEach((v, i) => tr.append(el('td', { className: i === 1 || i === 2 ? 'n' : '' }, v))); tb.append(tr); });
+
+  const box = document.getElementById('chart');
+  box.replaceChildren();
+  const W = Math.max(300, box.clientWidth), barH = 18, gap = 6;
+  const svg = svgEl('svg', { width: '100%', role: 'img', 'aria-label': 'Locations per region by spare demand capacity band, ' + current });
+  box.append(svg);
+  let labW = 0;
+  rows.forEach((r) => { const t = svgEl('text', {}); t.textContent = r.region; svg.append(t); labW = Math.max(labW, t.getComputedTextLength()); t.remove(); });
+  const m = { l: Math.min(labW + 12, W * 0.45), r: 40, t: 4, b: 26 };
+  const H = m.t + m.b + rows.length * (barH + gap);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('height', H);
+  const maxN = Math.max(...rows.map((r) => r.locations));
+  const x = (v) => m.l + (v / maxN) * (W - m.l - m.r);
+  const tip = el('div', { className: 'tip', hidden: true }); box.append(tip);
+  rows.forEach((r, i) => {
+    const y = m.t + i * (barH + gap);
+    const lab = svgEl('text', { x: m.l - 8, y: y + barH / 2, dy: '0.35em', 'text-anchor': 'end' }); lab.textContent = r.region; svg.append(lab);
+    let x0 = 0;
+    BANDS.forEach((b, j) => {
+      if (!r[b]) return;
+      const rect = svgEl('rect', { x: x(x0), y, width: Math.max(1, x(x0 + r[b]) - x(x0)), height: barH });
+      rect.style.fill = COLORS[j];
+      rect.addEventListener('pointermove', (ev) => {
+        const bb = box.getBoundingClientRect();
+        tip.hidden = false;
+        tip.textContent = `${r.region}: ${r[b]} of ${r.locations} at ${b}`;
+        tip.style.left = Math.min(ev.clientX - bb.left + 12, bb.width - 200) + 'px';
+        tip.style.top = (ev.clientY - bb.top + 12) + 'px';
+      });
+      rect.addEventListener('pointerleave', () => { tip.hidden = true; });
+      svg.append(rect);
+      x0 += r[b];
+    });
+    const n = svgEl('text', { x: x(r.locations) + 6, y: y + barH / 2, dy: '0.35em' }); n.textContent = r.locations; svg.append(n);
+  });
+  const step = Math.max(1, Math.ceil(maxN / Math.max(2, Math.floor((W - m.l) / 80))));
+  const nice = [1, 2, 5, 10, 20, 25, 50, 100, 200].find((s) => s >= step) || step;
+  for (let v = 0; v <= maxN; v += nice) {
+    const t = svgEl('text', { x: x(v), y: H - 8, 'text-anchor': 'middle' }); t.textContent = v; svg.append(t);
+    svg.append(svgEl('line', { x1: x(v), x2: x(v), y1: m.t, y2: H - m.b, stroke: 'var(--line)' }));
+  }
+}
+
+
+const NL = [{"country": "Netherlands", "area": "Crayestein", "Available": "4", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "0", "stations": "4", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Drenthe", "Available": "0", "Limited, no queue": "12", "Under study, queue": "0", "Shortage, queue": "0", "stations": "12", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Eemshaven Midden", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "1", "stations": "1", "queue_band": "Not stated", "resolved_by": "2033"}, {"country": "Netherlands", "area": "Enschede", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "6", "stations": "6", "queue_band": "Under 1 GW", "resolved_by": "2035"}, {"country": "Netherlands", "area": "Flevopolder, Utrecht en Gelderland", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "51", "stations": "51", "queue_band": "1 to 5 GW", "resolved_by": "2035"}, {"country": "Netherlands", "area": "Friesland", "Available": "0", "Limited, no queue": "17", "Under study, queue": "0", "Shortage, queue": "0", "stations": "17", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Groningen 220/20", "Available": "2", "Limited, no queue": "1", "Under study, queue": "0", "Shortage, queue": "0", "stations": "3", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Groningen Oost", "Available": "0", "Limited, no queue": "5", "Under study, queue": "0", "Shortage, queue": "0", "stations": "5", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Groningen West", "Available": "0", "Limited, no queue": "10", "Under study, queue": "0", "Shortage, queue": "0", "stations": "10", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Haven van Rotterdam", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "9", "stations": "9", "queue_band": "Under 1 GW", "resolved_by": "2032"}, {"country": "Netherlands", "area": "Hengelo", "Available": "0", "Limited, no queue": "11", "Under study, queue": "0", "Shortage, queue": "0", "stations": "11", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Limburg", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "29", "stations": "29", "queue_band": "1 to 5 GW", "resolved_by": "2034"}, {"country": "Netherlands", "area": "Maasvlakte", "Available": "0", "Limited, no queue": "1", "Under study, queue": "0", "Shortage, queue": "0", "stations": "1", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Noord-Brabant", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "33", "stations": "33", "queue_band": "Under 1 GW", "resolved_by": "2036"}, {"country": "Netherlands", "area": "Noord-Holland", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "24", "stations": "24", "queue_band": "1 to 5 GW", "resolved_by": "2036"}, {"country": "Netherlands", "area": "Noordelijk Zuid-Holland", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "19", "stations": "19", "queue_band": "Under 1 GW", "resolved_by": "2034"}, {"country": "Netherlands", "area": "Noordoostpolder", "Available": "3", "Limited, no queue": "1", "Under study, queue": "0", "Shortage, queue": "0", "stations": "4", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Westland", "Available": "2", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "0", "stations": "2", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Zeeland", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "11", "stations": "11", "queue_band": "Under 1 GW", "resolved_by": "2035"}, {"country": "Netherlands", "area": "Zwolle Hessenweg", "Available": "0", "Limited, no queue": "12", "Under study, queue": "0", "Shortage, queue": "0", "stations": "12", "queue_band": "Not stated", "resolved_by": ""}, {"country": "Netherlands", "area": "Zwolle West", "Available": "0", "Limited, no queue": "0", "Under study, queue": "0", "Shortage, queue": "7", "stations": "7", "queue_band": "Not stated", "resolved_by": "2035"}];
+const FR = [{"type": "Fast-track site", "zone": "Fouju", "region": "Île-de-France", "what_is_published": "First contract Jan 2026: 240 MW end 2027, 700 MW before end 2029, up to 1,400 MW", "power_from": "2027"}, {"type": "Fast-track site", "zone": "Montereau", "region": "Île-de-France", "what_is_published": "700 MW to 1 GW class site", "power_from": ""}, {"type": "Fast-track site", "zone": "Escaudain", "region": "Hauts-de-France", "what_is_published": "700 MW to 1 GW class site; developer found", "power_from": ""}, {"type": "Fast-track site", "zone": "Bosquel", "region": "Hauts-de-France", "what_is_published": "1 GW pre-reservation requested; being awarded", "power_from": ""}, {"type": "Fast-track site", "zone": "Dunkerque port", "region": "Hauts-de-France", "what_is_published": "700 MW to 1 GW class site; being awarded", "power_from": ""}, {"type": "Priority industrial zone", "zone": "Dunkerque", "region": "Hauts-de-France", "what_is_published": "Grid works launched; capacity from late 2028", "power_from": "2028"}, {"type": "Priority industrial zone", "zone": "Le Havre", "region": "Normandie", "what_is_published": "Grid works launched", "power_from": "2029"}, {"type": "Priority industrial zone", "zone": "Fos-sur-Mer", "region": "Provence-Alpes-Côte d'Azur", "what_is_published": "About 3,500 MW contracted, 600 to 700 MW under study", "power_from": "2029"}, {"type": "Industrial zone", "zone": "Plan de Campagne", "region": "Provence-Alpes-Côte d'Azur", "what_is_published": "Data-centre hub, about 550 MW, about 320 MW in 2030", "power_from": "2029"}, {"type": "Industrial zone", "zone": "Île-de-France Sud", "region": "Île-de-France", "what_is_published": "Works start once projects firm up", "power_from": "2030"}, {"type": "Industrial zone", "zone": "Valenciennes", "region": "Hauts-de-France", "what_is_published": "Works start once projects firm up", "power_from": "2030"}, {"type": "Industrial zone", "zone": "Loire-Estuaire", "region": "Pays de la Loire", "what_is_published": "Works start once projects firm up", "power_from": "2030"}, {"type": "Industrial zone", "zone": "Vallée de la chimie", "region": "Auvergne-Rhône-Alpes", "what_is_published": "Works start once projects firm up", "power_from": "2029"}, {"type": "Industrial zone", "zone": "Sud Alsace", "region": "Grand Est", "what_is_published": "Works start once projects firm up", "power_from": "2030"}, {"type": "Industrial zone", "zone": "Saint-Avold", "region": "Grand Est", "what_is_published": "Works start once projects firm up", "power_from": "2030"}, {"type": "Accelerated zone", "zone": "Lacq", "region": "Nouvelle-Aquitaine", "what_is_published": "Full power from 2030 with accelerated 400 kV works", "power_from": "2030"}, {"type": "Accelerated zone", "zone": "Châteauroux", "region": "Centre-Val de Loire", "what_is_published": "Full power from 2030 with accelerated 400 kV works", "power_from": "2030"}, {"type": "Accelerated zone", "zone": "Pyrénées-Ouest", "region": "Nouvelle-Aquitaine / Occitanie", "what_is_published": "Full power from 2030 if accelerated; about 1 GW hydrogen demand expected", "power_from": "2030"}, {"type": "Accelerated zone", "zone": "Port-La-Nouvelle", "region": "Occitanie", "what_is_published": "Shared infrastructure for several industries", "power_from": ""}];
+const NLCATS = ['Available', 'Limited, no queue', 'Under study, queue', 'Shortage, queue'];
+const NLCOL = ['var(--c2)', 'var(--c1)', '#e0a33a', '#c8553d'];
+const nlRows = NL.map((r) => ({ ...r, stations: +r.stations, ...Object.fromEntries(NLCATS.map((k) => [k, +r[k]])) }))
+  .sort((a, b) => b['Shortage, queue'] - a['Shortage, queue'] || b.stations - a.stations);
+const nlTot = nlRows.reduce((s, r) => s + r.stations, 0), nlShort = nlRows.reduce((s, r) => s + r['Shortage, queue'] + r['Under study, queue'], 0);
+document.getElementById('nlShort').textContent = `${nlShort} of ${nlTot}`;
+const nlLeg = document.getElementById('nlLegend');
+NLCATS.forEach((b, i) => { const s = el('span'); const sw = el('i'); sw.style.background = NLCOL[i]; s.append(sw, b); nlLeg.append(s); });
+const nlTb = document.getElementById('nlRows');
+nlRows.forEach((r) => { const tr = el('tr'); [r.area, r.stations, r['Shortage, queue'] + r['Under study, queue'], r.queue_band, r.resolved_by || 'Not stated'].forEach((v, i) => tr.append(el('td', { className: i === 1 || i === 2 ? 'n' : '' }, v))); nlTb.append(tr); });
+const frTb = document.getElementById('frRows');
+FR.forEach((r) => { const tr = el('tr'); [r.zone, r.region, r.type, r.what_is_published, r.power_from || 'Not stated'].forEach((v) => tr.append(el('td', {}, v))); frTb.append(tr); });
+
+function stacked(box, rows, cats, cols, labelKey, totalKey, aria) {
+  box.replaceChildren();
+  const W = Math.max(300, box.clientWidth), barH = 18, gap = 6;
+  const svg = svgEl('svg', { width: '100%', role: 'img', 'aria-label': aria });
+  box.append(svg);
+  let labW = 0;
+  rows.forEach((r) => { const t = svgEl('text', {}); t.textContent = r[labelKey]; svg.append(t); labW = Math.max(labW, t.getComputedTextLength()); t.remove(); });
+  const m = { l: Math.min(labW + 12, W * 0.45), r: 40, t: 4, b: 26 };
+  const H = m.t + m.b + rows.length * (barH + gap);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`); svg.setAttribute('height', H);
+  const maxN = Math.max(...rows.map((r) => r[totalKey]));
+  const x = (v) => m.l + (v / maxN) * (W - m.l - m.r);
+  const tip = el('div', { className: 'tip', hidden: true }); box.append(tip);
+  const step = Math.max(1, Math.ceil(maxN / Math.max(2, Math.floor((W - m.l) / 80))));
+  const nice = [1, 2, 5, 10, 20, 25, 50, 100, 200].find((s) => s >= step) || step;
+  for (let v = 0; v <= maxN; v += nice) {
+    svg.append(svgEl('line', { x1: x(v), x2: x(v), y1: m.t, y2: H - m.b, stroke: 'var(--line)' }));
+    const t = svgEl('text', { x: x(v), y: H - 8, 'text-anchor': 'middle' }); t.textContent = v; svg.append(t);
+  }
+  rows.forEach((r, i) => {
+    const y = m.t + i * (barH + gap);
+    const lab = svgEl('text', { x: m.l - 8, y: y + barH / 2, dy: '0.35em', 'text-anchor': 'end' }); lab.textContent = r[labelKey]; svg.append(lab);
+    let x0 = 0;
+    cats.forEach((b, j) => {
+      if (!r[b]) return;
+      const rect = svgEl('rect', { x: x(x0), y, width: Math.max(1, x(x0 + r[b]) - x(x0)), height: barH });
+      rect.style.fill = cols[j];
+      rect.addEventListener('pointermove', (ev) => {
+        const bb = box.getBoundingClientRect();
+        tip.hidden = false; tip.textContent = `${r[labelKey]}: ${r[b]} of ${r[totalKey]} ${b.toLowerCase()}`;
+        tip.style.left = Math.min(ev.clientX - bb.left + 12, bb.width - 220) + 'px'; tip.style.top = (ev.clientY - bb.top + 12) + 'px';
+      });
+      rect.addEventListener('pointerleave', () => { tip.hidden = true; });
+      svg.append(rect); x0 += r[b];
+    });
+    const n = svgEl('text', { x: x(r[totalKey]) + 6, y: y + barH / 2, dy: '0.35em' }); n.textContent = r[totalKey]; svg.append(n);
+  });
+}
+const drawNL = () => stacked(document.getElementById('nlChart'), nlRows, NLCATS, NLCOL, 'area', 'stations', 'Netherlands high-voltage stations by status for new demand, per congestion area');
+drawNL();
+
+drawRegion();
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(() => { drawRegion(); drawNL(); }, 150); });
+</script>
+</body>
+</html>
